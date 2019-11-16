@@ -150,6 +150,13 @@ class Processor:
                 'usage':f"{self.md['trigger_used']}deposit [amount]",
                 'function': self.cmd_deposit
             },
+            {
+                'cmd': 'exchange',
+                'aliases': [],
+                'description': f"Exchange your money for higher denominations",
+                'usage':f"{self.md['trigger_used']}exchange 10g30s99c",
+                'function': self.cmd_exchange
+            },
         ]
 
     def processor(self,state,metadata):
@@ -260,7 +267,22 @@ Description: {cmd_obj['description']}
         sys.exit(0)
 
     def cmd_deposit(self):
+        return "Coming soon..."
+
+    def cmd_exchange(self):
         return self.get_value(self.md['params'])
+        return self.get_gsc(self.get_value(self.md['params']))
+
+    def get_gsc(self,value):
+        cr = self.md['conversion_rate']
+        g,s,c = 0,0,0
+        c += value % cr
+        value = value - c
+        s += value % (cr*cr)
+        value = value - (s * cr)
+        g += value / (cr*cr)
+
+        return f'{g}g{s}s{c}c'
 
     def get_value(self,tokens):
         gold = 0
@@ -268,26 +290,33 @@ Description: {cmd_obj['description']}
         copper = 0
         head = 0
         value = 0
+        base = 1
         for token in tokens:
             for char in token:
                 char = char.lower()
                 if char == '': pass
                 elif char in ['g','gold']:
-                    gold = head * self.md['conversion_rate'] * self.md['conversion_rate']
+                    gold += head
                     head = 0
+                    base = 1
                 elif char in ['s','silver']:
-                    silver = head * self.md['conversion_rate']
+                    silver += head
                     head = 0
+                    base = 1
                 elif char in ['c','copper']:
-                    copper = head
+                    copper += head
                     head = 0
+                    base = 1
                 else:
                     try:
-                        head += int(char)
+                        head += (int(char) * base)
+                        base = base *10
                     except ValueError:
                         return f"Unable to convert {''.join(tokens)} into currency!"
+        if head != 0:
+            return f"Unable to convert {''.join(tokens)} into currency!"
         value = (
-            gold * self.md['conversion_rate'] * self.md['conversion_rate']
+            gold * (self.md['conversion_rate'] ** 2)
         ) + (
             silver * self.md['conversion_rate']
         ) + (
