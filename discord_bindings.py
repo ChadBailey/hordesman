@@ -1,6 +1,8 @@
 import os, dotenv, discord
 import sys, nltk
 
+from bot.bot import Processor
+
 dotenv.load_dotenv()
 
 client = discord.Client()
@@ -8,7 +10,16 @@ client = discord.Client()
 async def on_ready():
     print('We have logged in as {0.user}'.format(client))
 
-pc = Processor()
+binding = {
+    'name':'Hordesman',
+    'username': 'Hordesman#4045',
+    'binding':'discord',
+    'triggers': ['/','.'],
+    'cmd_match_percent': 0.7,
+    'offer_suggestions_percent': None,
+    'default_trigger': False
+}
+pc = Processor(binding)
 
 @client.event
 async def on_message(message):
@@ -26,7 +37,6 @@ async def on_message(message):
         'conversion_rate':10,
         'chatroom': '',
         'triggered': False,
-        'triggers': ['/','.'],
         'session_id': 0,
         'registered': False,
         'authenticated': False

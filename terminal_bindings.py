@@ -1,9 +1,18 @@
 import sys, nltk
 from bot.bot import Processor
 
+binding = {
+    'name':'Hordesman',
+    'binding':'terminal',
+    'triggers': [''],
+    'cmd_match_percent': 0.7,
+    'offer_suggestions_percent': 0,
+    'default_trigger': True
+}
+pc = Processor(binding)
+
 def main():
     print('Well met, mortal! Enter a command (type help for command list)')
-    pc = Processor()
     while True:
         raw = input('')
         tokens = nltk.word_tokenize(raw)
@@ -15,8 +24,6 @@ def main():
             'campaign': 1,
             'conversion_rate':100,
             'chatroom': '',
-            'triggered': False,
-            'triggers': ['!','.'],
             'session_id': 0,
             'registered': False,
             'authenticated': False

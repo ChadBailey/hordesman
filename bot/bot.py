@@ -2,125 +2,46 @@ import sys, json, nltk
 
 from difflib import SequenceMatcher
 
+from .data_models import \
+    about, \
+    game_data, \
+    items, \
+    user_db, \
+    user_mapper, \
+    state, \
+    md
+
 class Processor:
-    def __init__(self):
-        self.me = {
-            'name':'hordesman',
-            'author': 'Chad Bailey (https://github.com/ChadBailey)',
-            'url': 'https://github.com/ChadBailey/hordesman'
-        }
-        self.game_data = [
-            {
-                'campaign_id': 1,
-                'campaign_name': 'Decent Avernus',
-                'players': [1],
-                'roll20_url':'https://app.roll20.net/campaigns/details/5397144/decent-avernus',
-                'dnd_beyond_url': 'https://www.dndbeyond.com/campaigns/716014',
-                'rules_id': 1,
-                'conversion_rate':10,
-                'banks': [
-                    {
-                        'description':'Party Bank',
-                        'creator':'admin',
-                        'owner':'admin',
-                        'can_deposit': [1],
-                        'can_withdrawl':[1],
-                        'slots': 16,
-                        'currency': 0,
-                        'items': [
-                            {
-                                'item_id':1,
-                                'qty':2
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
-        self.items = [
-            {
-                'id':1,
-                'name': 'Gold Necklace',
-                'stack_size': 5,
-                'value': 2500,
-                'level': 1,
-                'soulbound': [],
-                'bind_on_pickup': False,
-                'bind_on_equip': False
-            },
-            {
-                'id':2,
-                'name': 'Blackened Pearl Ring',
-                'stack_size': 5,
-                'value':12500,
-                'level':1,
-                'soulbound': [],
-                'bind_on_pickup': False,
-                'bind_on_equip': False
-            }
-        ]
-        self.user_db = {
-            '': {
-                'groups': ['anonymous','unregistered'],
-                'whitelisted_commands':['help']
-            },
-            'admin': {
-                'groups': ['admins'],
-                'blacklisted_commands':[]
-            }
-        }
-        self.user_mapper = [
-            {
-                'user':'',
-                'aliases':'anonymous',
-                'groups':[]
-            },
-            {
-                'user': 'admin',
-                'aliases': ['Kamel','Chad','Rapha'],
-                'groups': ['admins','players']
-            }
-        ]
-        self.state = {
-            'confirm': None,
-            'confirm_callback': None, #Function to call on confirmation
-            'deny_callback': None #Function to call on denial
-        }
-        self.md = {
-            'raw': '',
-            'tokens': [],
-            'campaign': 1,
-            'conversion_rate':10,
-            'cmd': '',
-            'params': [],
-            'username': '',
-            'chatroom': '',
-            'triggered': False,
-            'triggers':[],
-            'trigger_used':'',
-            'session_id':0,
-            'registered': False,
-            'authenticated': False,
-        }
+    def __init__(self,binding):
+        if len(binding['triggers']) == 0:
+            raise ValueError("Error: No triggers specified for binding. If you want to trigger off of everything, you must specify a blank trigger via a blank string like: `['']`")
+        self.binding = binding
+        self.about = about
+        self.game_data = game_data
+        self.items = items
+        self.user_db = user_db
+        self.user_mapper = user_mapper
+        self.state = state
+        self.md = md
         self.cmd_mapper = [
             {
                 'cmd': '',
                 'aliases': [],
                 'usage':'N/A',
-                'description': 'Default command (ran if no other commands match)',
+                'description': 'Default command (ran if no other commands match). Requires `default_trigger` to be set to `True`',
                 'function': self.cmd_default
             },
             {
                 'cmd': 'yes',
                 'aliases': ['y'],
                 'usage':f"{self.md['trigger_used']}yes",
-                'description':f"Response to question asked by {self.me['name']}",
+                'description':f"Response to question asked by {self.binding['name']}",
                 'function': self.cmd_y
             },
             {
                 'cmd': 'no',
                 'aliases': ['n'],
-                'description':f"Response to question asked by {self.me['name']}",
+                'description':f"Response to question asked by {self.binding['name']}",
                 'usage':f"{self.md['trigger_used']}no",
                 'function': self.cmd_n
             },
@@ -141,7 +62,7 @@ class Processor:
             {
                 'cmd': 'about',
                 'aliases': ['info'],
-                'description': f"Shows information about {self.me['name']}",
+                'description': f"Shows information about {self.binding['name']}",
                 'usage':f"{self.md['trigger_used']}about",
                 'function': self.cmd_about
             },
@@ -159,14 +80,21 @@ class Processor:
                 'usage':f"{self.md['trigger_used']}exchange 10g30s99c",
                 'function': self.cmd_exchange
             },
+            {
+                'cmd': 'trigger',
+                'aliases': ['t'],
+                'description': f"View or set the trigger for the current binding",
+                'usage':f"{self.md['trigger_used']}trigger [add/remove] [trigger value]",
+                'function': self.cmd_trigger
+            },
         ]
 
     def processor(self,state,metadata):
         try:
-            lc = lambda token: [ x.lower() for x in token ]
+            # lc = lambda token: [ x.lower() for x in token ]
             self.md.update(metadata)
             self.state = state
-            for trigger in self.md['triggers']:
+            for trigger in self.binding['triggers']:
                 trigger_len = len(trigger)
                 trigger_check = self.md['raw'][0:trigger_len]
                 if trigger_check == trigger:
@@ -221,7 +149,7 @@ class Processor:
         cmd = self.md['cmd']
         suggested = self.find_cmd()
         self.suggested = suggested
-        if suggested['pcnt'] > 0.7:
+        if suggested['pcnt'] > self.binding['cmd_match_percent']:
             cmd = suggested['cmd']
         for cmd_obj in self.cmd_mapper:
             if cmd == cmd_obj['cmd'] or cmd in cmd_obj['aliases']:
@@ -242,9 +170,12 @@ class Processor:
                     return 'Access Denied. Go cry to mommy'
 
     def cmd_default(self):
-        if self.suggested['pcnt'] > 0 and self.md['cmd'] != '':
-            return f'''"{self.md['trigger_used']}{self.md['cmd']}" not understood. Did you mean "{self.md['trigger_used']}{self.suggested['cmd']}"?'''
-        return "Sorry, I don't understand. For a list of available commands please type 'help'"
+        if self.binding['offer_suggestions_percent'] is not None:
+            if self.suggested['pcnt'] > self.binding['offer_suggestions_percent'] and self.md['cmd'] != '':
+                return f'''"{self.md['trigger_used']}{self.md['cmd']}" not understood. Did you mean "{self.md['trigger_used']}{self.suggested['cmd']}"?'''
+
+        if self.binding['default_trigger']:
+            return "Sorry, I don't understand. For a list of available commands please type 'help'"
 
     def cmd_help(self):
         if len(self.md['params']) == 0:
@@ -270,9 +201,15 @@ Description: {cmd_obj['description']}
 
     def cmd_about(self):
         result = ''
-        for k,v in self.me.items():
+        for k,v in self.about.items():
             result += f"{k}: {v}\n"
         return result
+
+    def cmd_trigger(self):
+        if len(self.md['params']) == 0:
+            return f"Current trigger(s): `{'`,`'.join(self.binding['triggers'])}`"
+        else:
+            raise NotImplementedError("Support for changing triggers is not yet implemented")
 
     def cmd_y(self):
         if self.state['confirm'] is None:
