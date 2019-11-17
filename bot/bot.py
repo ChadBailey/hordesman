@@ -162,27 +162,29 @@ class Processor:
         ]
 
     def processor(self,state,metadata):
-        lc = lambda token: [ x.lower() for x in token ]
-        self.md.update(metadata)
-        self.state = state
-        for trigger in self.md['triggers']:
-            trigger_len = len(trigger)
-            trigger_check = self.md['raw'][0:trigger_len]
-            if trigger_check == trigger:
-                self.md['trigger_used'] = trigger_check
-                self.md['raw_wo_trigger'] = self.md['raw'][trigger_len:]
-                self.md['tokens'] = nltk.word_tokenize(self.md['raw_wo_trigger'])
-                if len(self.md['tokens']) > 0:
-                    self.md['cmd'] = self.md['tokens'][0].lower()
-                else:
-                    self.md['cmd'] = ''
-                self.md['triggered'] = True
-                break
-        if self.md['triggered']:
-            # Maybe: lower the tokens? i think we should push that out to individual commands
-            self.md['params'] = self.md['tokens'][1:]
-            return self.fire_cmd()
-
+        try:
+            lc = lambda token: [ x.lower() for x in token ]
+            self.md.update(metadata)
+            self.state = state
+            for trigger in self.md['triggers']:
+                trigger_len = len(trigger)
+                trigger_check = self.md['raw'][0:trigger_len]
+                if trigger_check == trigger:
+                    self.md['trigger_used'] = trigger_check
+                    self.md['raw_wo_trigger'] = self.md['raw'][trigger_len:]
+                    self.md['tokens'] = nltk.word_tokenize(self.md['raw_wo_trigger'])
+                    if len(self.md['tokens']) > 0:
+                        self.md['cmd'] = self.md['tokens'][0].lower()
+                    else:
+                        self.md['cmd'] = ''
+                    self.md['triggered'] = True
+                    break
+            if self.md['triggered']:
+                # Maybe: lower the tokens? i think we should push that out to individual commands
+                self.md['params'] = self.md['tokens'][1:]
+                return self.fire_cmd()
+        except Exception as e:
+            return f"Oh dear, something went wrong:\n\n{e}"
 
     def check_privilege(self,cmd):
         user = self.user_db[self.md['username']]
@@ -251,7 +253,7 @@ class Processor:
                 result += f'''
 Command: {cmd_obj['cmd']}
 Aliases: {','.join(cmd_obj['aliases'])}
-Usage: {cmd_obj['usage']}
+Usage: {self.md['trigger_used']}{cmd_obj['usage']}
 Description: {cmd_obj['description']}
 '''
             return result

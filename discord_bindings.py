@@ -12,6 +12,7 @@ pc = Processor()
 
 @client.event
 async def on_message(message):
+    print(message)
     if message.author == client.user:
         return
     raw = message.content
@@ -25,7 +26,7 @@ async def on_message(message):
         'conversion_rate':10,
         'chatroom': '',
         'triggered': False,
-        'triggers': ['!','.'],
+        'triggers': ['/','.'],
         'session_id': 0,
         'registered': False,
         'authenticated': False
