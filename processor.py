@@ -1,6 +1,8 @@
 
 import sys, json
 
+from difflib import SequenceMatcher
+
 class Processor:
     def __init__(self):
         self.me = {
@@ -94,6 +96,7 @@ class Processor:
             'params': [],
             'username': '',
             'chatroom': '',
+            'triggered': False,
             'triggers':[],
             'trigger_used':'',
             'session_id':0,
@@ -163,13 +166,24 @@ class Processor:
         lc = lambda token: [ x.lower() for x in token ]
         self.md.update(metadata)
         self.state = state
-        if len(self.md['tokens']) > 0:
-            self.md['cmd'] = self.md['tokens'][0].lower()
-        else:
-            self.md['cmd'] = ''
+        for trigger in self.md['triggers']:
+            trigger_len = len(trigger)
+            trigger_check = self.md['raw'][0:trigger_len]
+            if trigger_check == trigger:
+                self.md['trigger_used'] = trigger_check
+                self.md['raw_wo_trigger'] = self.md['raw'][trigger_len:]
+                self.md['tokens'] = nltk.word_tokenize(self.md['raw_wo_trigger'])
+                if len(self.md['tokens']) > 0:
+                    self.md['cmd'] = self.md['tokens'][0].lower()
+                else:
+                    self.md['cmd'] = ''
+                self.md['triggered'] = True
+                break
+        if self.md['triggered']:
+            # Maybe: lower the tokens? i think we should push that out to individual commands
+            self.md['params'] = self.md['tokens'][1:]
+            return self.fire_cmd()
 
-        self.md['params'] = lc(self.md['tokens'][1:])
-        return self.fire_cmd()
 
     def check_privilege(self,cmd):
         user = self.user_db[self.md['username']]
@@ -184,8 +198,30 @@ class Processor:
             else:
                 return False
 
+    def find_cmd(self):
+        cmd = self.md['cmd']
+        # all_cmds = [ [cmd_obj['cmd']] + cmd_obj['aliases'] for cmd_obj in self.cmd_mapper ]
+        all_cmds = []
+        highest_match = {
+            'pcnt': 0,
+            'cmd': ''
+        }
+        for cmd_obj in self.cmd_mapper:
+            all_cmds += [cmd_obj['cmd']]
+            all_cmds += cmd_obj['aliases']
+        for cmd_txt in all_cmds:
+            match = SequenceMatcher(None, cmd_txt, cmd).ratio()
+            if match > highest_match['pcnt']:
+                highest_match['pcnt'] = match
+                highest_match['cmd'] = cmd_txt
+        return highest_match
+
     def fire_cmd(self):
         cmd = self.md['cmd']
+        suggested = self.find_cmd()
+        self.suggested = suggested
+        if suggested['pcnt'] > 0.7:
+            cmd = suggested['cmd']
         for cmd_obj in self.cmd_mapper:
             if cmd == cmd_obj['cmd'] or cmd in cmd_obj['aliases']:
                 self.cmd_obj = cmd_obj
@@ -205,6 +241,8 @@ class Processor:
                     return 'Access Denied. Go cry to mommy'
 
     def cmd_default(self):
+        if self.suggested['pcnt'] > 0 and self.md['cmd'] != '':
+            return f'''"{self.md['trigger_used']}{self.md['cmd']}" not understood. Did you mean "{self.md['trigger_used']}{self.suggested['cmd']}"?'''
         return "Sorry, I don't understand. For a list of available commands please type 'help'"
 
     def cmd_help(self):
@@ -270,7 +308,6 @@ Description: {cmd_obj['description']}
         return "Coming soon..."
 
     def cmd_exchange(self):
-        return self.get_value(self.md['params'])
         return self.get_gsc(self.get_value(self.md['params']))
 
     def get_gsc(self,value):
@@ -278,9 +315,9 @@ Description: {cmd_obj['description']}
         g,s,c = 0,0,0
         c += value % cr
         value = value - c
-        s += value % (cr*cr)
+        s += int(value /cr) % cr
         value = value - (s * cr)
-        g += value / (cr*cr)
+        g += int(value / (cr**2))
 
         return f'{g}g{s}s{c}c'
 
@@ -288,32 +325,28 @@ Description: {cmd_obj['description']}
         gold = 0
         silver = 0
         copper = 0
-        head = 0
+        head = ''
         value = 0
-        base = 1
         for token in tokens:
             for char in token:
                 char = char.lower()
                 if char == '': pass
                 elif char in ['g','gold']:
-                    gold += head
-                    head = 0
-                    base = 1
+                    gold += int(head)
+                    head = ''
                 elif char in ['s','silver']:
-                    silver += head
-                    head = 0
-                    base = 1
+                    silver += int(head)
+                    head = ''
                 elif char in ['c','copper']:
-                    copper += head
-                    head = 0
-                    base = 1
+                    copper += int(head)
+                    head = ''
                 else:
                     try:
-                        head += (int(char) * base)
-                        base = base *10
+                        int(char)
+                        head += char
                     except ValueError:
                         return f"Unable to convert {''.join(tokens)} into currency!"
-        if head != 0:
+        if head != '':
             return f"Unable to convert {''.join(tokens)} into currency!"
         value = (
             gold * (self.md['conversion_rate'] ** 2)
@@ -329,29 +362,67 @@ Description: {cmd_obj['description']}
 # TODO: Move to commandline.py / make structure more better #
 #############################################################
 
+# import sys, nltk
+
+# def main():
+#     print('Well met, mortal! Enter a command (type help for command list)')
+#     pc = Processor()
+#     while True:
+#         raw = input('')
+#         tokens = nltk.word_tokenize(raw)
+#         state = pc.state
+#         md = {
+#             'raw': raw,
+#             'tokens': tokens,
+#             'username': 'admin',
+#             'campaign': 1,
+#             'conversion_rate':100,
+#             'chatroom': '',
+#             'triggered': False,
+#             'triggers': ['!','.'],
+#             'session_id': 0,
+#             'registered': False,
+#             'authenticated': False
+#         }
+#         print(pc.processor(state,md))
+
+# if __name__ == '__main__':
+#     main()
+
+import os, dotenv, discord
 import sys, nltk
 
-def main():
-    print('Well met, mortal! Enter a command (type help for command list)')
-    pc = Processor()
-    while True:
-        raw = input('')
-        tokens = nltk.word_tokenize(raw)
-        state = pc.state
-        md = {
-            'raw': raw,
-            'tokens': tokens,
-            'username': 'admin',
-            'campaign': 1,
-            'conversion_rate':10,
-            'chatroom': '',
-            'triggers': [],
-            'trigger_used': '',
-            'session_id': 0,
-            'registered': False,
-            'authenticated': False
-        }
-        print(pc.processor(state,md))
+dotenv.load_dotenv()
 
-if __name__ == '__main__':
-    main()
+client = discord.Client()
+@client.event
+async def on_ready():
+    print('We have logged in as {0.user}'.format(client))
+
+pc = Processor()
+
+@client.event
+async def on_message(message):
+    if message.author == client.user:
+        return
+    raw = message.content
+    tokens = nltk.word_tokenize(raw)
+    state = pc.state
+    md = {
+        'raw': raw,
+        'tokens': tokens,
+        'username': 'admin',
+        'campaign': 1,
+        'conversion_rate':10,
+        'chatroom': '',
+        'triggered': False,
+        'triggers': ['!','.'],
+        'session_id': 0,
+        'registered': False,
+        'authenticated': False
+    }
+    response = pc.processor(state,md)
+    if response: await message.channel.send(response)
+
+
+client.run(os.getenv('DISCORD_TOKEN'))
