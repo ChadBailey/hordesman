@@ -1,8 +1,3 @@
-about = {
-    'name': 'Hordesman Bot',
-    'author': 'Chad Bailey (https://github.com/ChadBailey)',
-    'url': 'https://github.com/ChadBailey/hordesman'
-}
 game_data = [
     {
         'campaign_id': 1,

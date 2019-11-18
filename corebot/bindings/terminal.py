@@ -1,5 +1,5 @@
 import sys, nltk
-from bot.bot import Processor
+from corebot.system.core import Processor
 
 binding = {
     'name':'Hordesman',
@@ -11,7 +11,7 @@ binding = {
 }
 pc = Processor(binding)
 
-def main():
+def run():
     print('Well met, mortal! Enter a command (type help for command list)')
     while True:
         raw = input('')
@@ -31,5 +31,4 @@ def main():
         print(pc.processor(state,md))
 
 if __name__ == '__main__':
-    main()
-
+    run()

@@ -1,7 +1,7 @@
 import os, dotenv, discord
 import sys, nltk
 
-from bot.bot import Processor
+from corebot.system.core import Processor
 
 dotenv.load_dotenv()
 
@@ -16,8 +16,8 @@ binding = {
     'binding':'discord',
     'triggers': ['/','.'],
     'cmd_match_percent': 0.7,
-    'offer_suggestions_percent': None,
-    'default_trigger': False
+    'offer_suggestions_percent': 0,
+    'default_trigger': True
 }
 pc = Processor(binding)
 
@@ -44,5 +44,8 @@ async def on_message(message):
     response = pc.processor(state,md)
     if response: await message.channel.send(response)
 
+def run():
+    client.run(os.getenv('DISCORD_TOKEN'))
 
-client.run(os.getenv('DISCORD_TOKEN'))
+if __name__ == '__main__':
+    run()
